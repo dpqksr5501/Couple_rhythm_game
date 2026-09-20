@@ -1081,6 +1081,13 @@ namespace CoupleRhythm
                 "MISS           " + missCount + "\n" +
                 "WRONG PRESS  " + wrongPressCount + "\n" +
                 "MAX COMBO  " + maxCombo;
+
+            SongDefinition currentSong = songs != null && selectedSongIndex >= 0 && selectedSongIndex < songs.Length ? songs[selectedSongIndex] : null;
+            RhythmFirebaseService.Instance.SubmitScore(
+                currentSong != null ? currentSong.id : "song",
+                currentSong != null ? currentSong.title : "Unknown",
+                finalAccuracy, maxCombo, perfectCount, goodCount, missCount, wrongPressCount
+            );
             if (premiumPrizeEarned)
             {
                 resultRewardText.text = "♥ 100% 달성! 아주 좋은 상품을 드립니다 ♥\n관리자에게 이 화면을 보여주세요!";
@@ -1238,6 +1245,7 @@ namespace CoupleRhythm
 
         private void ConfirmPayment()
         {
+            RhythmFirebaseService.Instance.RecordGameStart(1000);
             ShowSongSelect();
         }
 
