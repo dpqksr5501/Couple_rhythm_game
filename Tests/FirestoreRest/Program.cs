@@ -1,0 +1,23 @@
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+using System.Text;
+using System.Text.Json;
+using CoupleRhythm;
+using UnityEngine.Networking;
+var auth=new BoothStaffAuth();
+typeof(BoothStaffAuth).GetProperty("Instance",BindingFlags.Static|BindingFlags.Public).SetValue(null,auth);
+typeof(BoothStaffAuth).GetField("idToken",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(auth,"test");
+typeof(BoothStaffAuth).GetField("tokenExpiresAt",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(auth,1000f);
+var service=RhythmFirebaseService.Instance;
+service.firebaseProjectId="test-project";
+var requests=new List<string>();
+var stats="{\"updateTime\":\"2026-01-01T00:00:00Z\",\"fields\":{\"totalDolls\":{\"integerValue\":\"1\"},\"totalLegendaryDolls\":{\"integerValue\":\"1\"},\"totalPlays\":{\"integerValue\":\"0\"},\"totalRevenue\":{\"integerValue\":\"0\"},\"totalSuccesses\":{\"integerValue\":\"0\"}}}";
+UnityWebRequest.Responder=req=>{ if(req.method=="GET"&&req.url.EndsWith("GameState/stats"))return(200,stats); if(req.method=="GET")return(404,""); var body=Encoding.UTF8.GetString(req.uploadHandler.bytes); JsonDocument.Parse(body); requests.Add(body); return(200,"{}"); };
+bool started=false,redeemed=false;
+service.RecordGameStart("round1",1000,(ok,_)=>started=ok);
+service.RedeemPrize("round1",false,(ok,_)=>redeemed=ok);
+service.SubmitScore("round1","song","A \"song\"",95,10,1,2,3,4);
+if(!started||!redeemed||requests.Count!=3)throw new Exception($"flows: {started} {redeemed} {requests.Count}");
+foreach(var body in requests){using var doc=JsonDocument.Parse(body); if(doc.RootElement.GetProperty("writes").GetArrayLength()==0)throw new Exception("empty writes");}
+Console.WriteLine("Rhythm start/prize/leaderboard JSON: 3 valid commits");

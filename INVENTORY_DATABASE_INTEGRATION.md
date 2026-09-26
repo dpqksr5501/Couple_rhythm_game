@@ -11,6 +11,8 @@
 - 재고 수량과 기본 플레이/매출 카운터는 `GameState/stats`에 운영진이 실제 값으로 초기화합니다. 인형 100개를 코드가 임의로 생성하지 않습니다.
 - REST 요청은 Firebase 이메일 로그인으로 받은 ID 토큰을 사용합니다. `firestore.rules`는 `boothStaff` 클레임 계정만 허용하지만 아직 서버 배포 여부를 확인하지 못했습니다.
 
+로컬 JSON 모의 검사는 `dotnet run --project Tests/FirestoreRest/FirestoreRestChecks.csproj`로 실행합니다. 이 검사는 실제 Firebase 접속을 대신하지 않습니다.
+
 ## 운영 전에 할 일
 
 1. 별도 Firebase 테스트 프로젝트에서 이메일/비밀번호 로그인, 스태프 계정, `boothStaff` 클레임을 준비합니다. `admin_tools/grant_staff_claim.py`는 기본 미리보기이며 `--apply`에서만 변경합니다.
