@@ -23,7 +23,7 @@ Accuracy is normalized by the complete chart, so songs with different durations 
 - `MISS`: 0% credit
 - Duet and hold notes have double weight because they require two inputs or sustained input.
 - Every wrong press adds the same penalty as one missed normal note.
-- Prize condition: final accuracy of 80% or higher
+- Prize condition: final accuracy of 90% or higher
 
 ## Adding authorised music
 

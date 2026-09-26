@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -104,6 +105,13 @@ namespace CoupleRhythm
         private Text resultAccuracyText;
         private Text resultStatsText;
         private Text resultRewardText;
+        private Text paymentStatusText;
+        private Button redeemButton;
+        private Button nextGameButton;
+        private string roundId;
+        private bool paymentPending;
+        private bool prizePending;
+        private bool prizeIsLegendary;
         private RectTransform fireworksRoot;
         private Text celebrationText;
         private Text adminHelpText;
@@ -176,6 +184,13 @@ namespace CoupleRhythm
         private void Update()
         {
             Keyboard keyboard = Keyboard.current;
+            if (state == GameState.Results && keyboard != null &&
+                keyboard.leftCtrlKey.isPressed && keyboard.leftAltKey.isPressed && keyboard.pKey.wasPressedThisFrame)
+                RedeemPrize();
+            if (state == GameState.Results && keyboard != null &&
+                keyboard.leftCtrlKey.isPressed && keyboard.leftAltKey.isPressed && keyboard.sKey.wasPressedThisFrame &&
+                BoothStaffAuth.Instance.IsAdmin)
+                SaveCurrentScore();
             if (adminOpen)
                 return;
 
@@ -328,6 +343,8 @@ namespace CoupleRhythm
             Button confirm = RuntimeUI.Button("Confirm Payment", paymentRoot, "입금 완료  ·  노래 고르기  ♥", new Color(0.93f, 0.28f, 0.58f), Color.white, 28, ConfirmPayment);
             SetFixed(confirm.GetComponent<RectTransform>(), new Vector2(0.5f, 0f), new Vector2(0, 61), new Vector2(520, 78));
             RuntimeUI.AddShadow(confirm.targetGraphic, new Color(0.48f, 0.10f, 0.32f, 0.25f), new Vector2(0, -8));
+            paymentStatusText = RuntimeUI.Text("Payment Status", paymentRoot, string.Empty, 20, Color.white);
+            SetFixed(paymentStatusText.rectTransform, new Vector2(0.5f, 0f), new Vector2(0, 158), new Vector2(980, 58));
         }
 
         private void BuildSongSelect(Transform parent)
@@ -528,8 +545,10 @@ namespace CoupleRhythm
             SetFixed(resultRewardText.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, -187), new Vector2(670, 90));
             resultRewardText.fontStyle = FontStyle.Bold;
 
-            Button nextGame = RuntimeUI.Button("Next Game", panel, "다음 게임하기  ♥", new Color(0.93f, 0.28f, 0.58f), Color.white, 26, ShowPayment);
-            SetFixed(nextGame.GetComponent<RectTransform>(), new Vector2(0.5f, 0f), new Vector2(0, 72), new Vector2(420, 76));
+            redeemButton = RuntimeUI.Button("Redeem Prize", panel, "스태프 · 재고 확인 후 지급 확정", new Color(0.23f, 0.54f, 0.49f), Color.white, 22, RedeemPrize);
+            SetFixed(redeemButton.GetComponent<RectTransform>(), new Vector2(0.5f, 0f), new Vector2(0, 153), new Vector2(480, 65));
+            nextGameButton = RuntimeUI.Button("Next Game", panel, "다음 게임하기  ♥", new Color(0.93f, 0.28f, 0.58f), Color.white, 26, ShowPayment);
+            SetFixed(nextGameButton.GetComponent<RectTransform>(), new Vector2(0.5f, 0f), new Vector2(0, 72), new Vector2(420, 76));
 
             celebrationText = RuntimeUI.Text("Celebration", resultRoot, "축하합니다!", 62, new Color(1f, 0.86f, 0.28f));
             SetFixed(celebrationText.rectTransform, new Vector2(0.5f, 1f), new Vector2(0, -76), new Vector2(920, 100));
@@ -1082,21 +1101,16 @@ namespace CoupleRhythm
                 "WRONG PRESS  " + wrongPressCount + "\n" +
                 "MAX COMBO  " + maxCombo;
 
-            SongDefinition currentSong = songs != null && selectedSongIndex >= 0 && selectedSongIndex < songs.Length ? songs[selectedSongIndex] : null;
-            RhythmFirebaseService.Instance.SubmitScore(
-                currentSong != null ? currentSong.id : "song",
-                currentSong != null ? currentSong.title : "Unknown",
-                finalAccuracy, maxCombo, perfectCount, goodCount, missCount, wrongPressCount
-            );
+            SaveCurrentScore();
             if (premiumPrizeEarned)
             {
-                resultRewardText.text = "♥ 100% 달성! 아주 좋은 상품을 드립니다 ♥\n관리자에게 이 화면을 보여주세요!";
+                resultRewardText.text = "♥ 100% 달성 · 레전드 인형 대상 ♥\n운영진이 Ctrl+Alt+P로 재고를 확정한 후 지급합니다.";
                 resultRewardText.color = new Color(0.93f, 0.45f, 0.08f);
                 StartCoroutine(CelebrationRoutine());
             }
             else if (prizeEarned)
             {
-                resultRewardText.text = "♥ 상품 획득 성공! 관리자에게 보여주세요 ♥";
+                resultRewardText.text = "♥ 일반 인형 대상 ♥\n운영진이 Ctrl+Alt+P로 재고를 확정한 후 지급합니다.";
                 resultRewardText.color = new Color(0.89f, 0.22f, 0.52f);
             }
             else
@@ -1104,6 +1118,9 @@ namespace CoupleRhythm
                 resultRewardText.text = "상품 획득 기준은 정확도 " + PrizeAccuracyThreshold.ToString("0") + "% 이상입니다.";
                 resultRewardText.color = new Color(0.46f, 0.31f, 0.47f);
             }
+            prizeIsLegendary = premiumPrizeEarned;
+            redeemButton.gameObject.SetActive(false);
+            nextGameButton.interactable = !prizeEarned;
         }
 
         private IEnumerator CelebrationRoutine()
@@ -1235,6 +1252,9 @@ namespace CoupleRhythm
             musicSource.Stop();
             ClearNotes();
             state = GameState.Payment;
+            roundId = Guid.NewGuid().ToString("N");
+            paymentPending = false;
+            if (paymentStatusText != null) paymentStatusText.text = string.Empty;
             adminOpen = false;
             paymentRoot.gameObject.SetActive(true);
             selectionRoot.gameObject.SetActive(false);
@@ -1245,8 +1265,54 @@ namespace CoupleRhythm
 
         private void ConfirmPayment()
         {
-            RhythmFirebaseService.Instance.RecordGameStart(1000);
-            ShowSongSelect();
+            if (paymentPending) return;
+            paymentPending = true;
+            if (paymentStatusText != null) paymentStatusText.text = "부스 기록 확인 중... 다시 누르지 마세요.";
+            RhythmFirebaseService.Instance.RecordGameStart(roundId, 1000, (success, error) =>
+            {
+                paymentPending = false;
+                if (success) ShowSongSelect();
+                else
+                {
+                    if (paymentStatusText != null)
+                        paymentStatusText.text = "기록 확인 실패 · 같은 버튼으로 재시도하거나 운영진에게 알려 주세요. " + roundId;
+                    Debug.LogWarning("[RhythmFirebase] 결제 확인 기록 보류: " + error + " / round=" + roundId);
+                }
+            });
+        }
+
+        private void SaveCurrentScore()
+        {
+            SongDefinition currentSong = songs != null && selectedSongIndex >= 0 && selectedSongIndex < songs.Length ? songs[selectedSongIndex] : null;
+            RhythmFirebaseService.Instance.SubmitScore(roundId,
+                currentSong != null ? currentSong.id : "song",
+                currentSong != null ? currentSong.title : "Unknown",
+                Mathf.Round(CalculateAccuracy(true) * 10f) / 10f,
+                maxCombo, perfectCount, goodCount, missCount, wrongPressCount);
+        }
+
+        private void RedeemPrize()
+        {
+            if (prizePending || !BoothStaffAuth.Instance.IsAdmin) return;
+            prizePending = true;
+            redeemButton.interactable = false;
+            resultRewardText.text = "공유 재고 확인 중입니다. 상품을 아직 건네지 마세요.";
+            RhythmFirebaseService.Instance.RedeemPrize(roundId, prizeIsLegendary, (success, error) =>
+            {
+                prizePending = false;
+                if (success)
+                {
+                    resultRewardText.text = "재고 차감 확정 · 운영진이 상품을 지급해 주세요.";
+                    redeemButton.gameObject.SetActive(false);
+                    nextGameButton.interactable = true;
+                }
+                else
+                {
+                    resultRewardText.text = "지급 보류 · 운영진 수기 대응 필요\n" + error + "\n기록 번호: " + roundId;
+                    redeemButton.interactable = true;
+                    nextGameButton.interactable = true;
+                }
+            });
         }
 
         private void ResetRoundStats()
